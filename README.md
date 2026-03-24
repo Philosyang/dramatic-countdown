@@ -1,14 +1,15 @@
 # DramaticCountdown
 
-A macOS menu bar app that shows a countdown to your next calendar event with dramatic flair.
+A macOS menu bar app that shows a countdown to your next calendar event.
 
 ## Features
 
-- Shows countdown to the next calendar event in the menu bar (e.g. "Team sync in 5:23")
-- Blinks/pulses the menu bar text when under 60 seconds remain
-- Plays a BBC news countdown sound effect during the final 15 seconds
-- Shows "LIVE" indicator when the event starts
-- Uses EventKit to fetch real calendar events within the next 24 hours
+- Shows a `((•))` broadcast icon in the menu bar — icon only when the next event is >1 hour away
+- Displays countdown: `Event in 25m` (>1 min) or `Event in 42s` (<1 min)
+- Configurable one-time blink alerts at specific thresholds (e.g. T-30m, T-15m, T-5m)
+- Continuous red background blinking in the final 10 seconds
+- Shows `Event is live!` with a solid red background at T-0
+- Uses EventKit to fetch the next calendar event within 24 hours
 
 ## Requirements
 
@@ -23,22 +24,73 @@ swift build
 swift run
 ```
 
+For a release build:
+
+```bash
+swift build -c release
+# Binary at .build/release/DramaticCountdown
+```
+
 Or use the convenience script:
 
 ```bash
 ./run.sh
 ```
 
-## Audio File
+## Configuration
 
-To enable the countdown sound effect, add a `bbc-countdown.mp3` file in one of these locations:
+Create a `config.json` in the project root or at `~/.config/dramatic-countdown/config.json`:
 
-1. `Sources/DramaticCountdown/Resources/bbc-countdown.mp3` (bundled with the build)
-2. Next to the built executable
-3. In the current working directory
-4. In a `Resources/` subdirectory of the current working directory
+```json
+{
+  "blink_alerts": ["30m", "15m", "10m", "5m", "2m", "1m"]
+}
+```
 
-The app works fine without the audio file -- it will just skip the sound effect.
+Each entry is a time-before-event threshold that triggers a single 500ms red blink in the menu bar. Supports `s` (seconds), `m` (minutes), and `h` (hours) suffixes.
+
+## Launch at Login
+
+To start DramaticCountdown automatically when you boot your Mac, create a Launch Agent plist.
+
+1. Create the file at `~/Library/LaunchAgents/com.dramatic-countdown.plist`:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.org/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.dramatic-countdown</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/full/path/to/dramatic-countdown/.build/release/DramaticCountdown</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/full/path/to/dramatic-countdown</string>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <false/>
+</dict>
+</plist>
+```
+
+Replace `/full/path/to/dramatic-countdown` with the actual path to your cloned repo.
+
+2. Load the agent (starts it now and on future boots):
+
+```bash
+launchctl load ~/Library/LaunchAgents/com.dramatic-countdown.plist
+```
+
+3. To stop and remove from login:
+
+```bash
+launchctl unload ~/Library/LaunchAgents/com.dramatic-countdown.plist
+```
+
+After updating the code, rebuild with `swift build -c release` — the launch agent will pick up the new binary on next launch.
 
 ## Calendar Access
 
