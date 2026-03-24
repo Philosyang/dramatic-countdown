@@ -10,6 +10,9 @@ A macOS menu bar app that shows a countdown to your next calendar event.
 - Continuous red background blinking in the final 10 seconds
 - Shows `Event is live!` with a solid red background at T-0
 - Uses EventKit to fetch the next calendar event within 24 hours
+- **Focus mode awareness** with two toggleable options:
+  - **Prevent blinks in Focus** — suppresses all blink animations (including "is live!" background) when a macOS Focus mode is active
+  - **Hide event text in Focus** — shows only the broadcast icon with no event text, useful when screen sharing during a meeting
 
 ## Requirements
 
