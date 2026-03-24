@@ -83,6 +83,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private let defaults = UserDefaults.standard
     private let kPreventBlinksInFocus = "preventBlinksInFocus"
     private let kHideTextInFocus = "hideTextInFocus"
+    private let kExcludeDeclined = "excludeDeclinedEvents"
 
     private var preventBlinksInFocus: Bool {
         get { defaults.object(forKey: kPreventBlinksInFocus) as? Bool ?? true }
@@ -91,6 +92,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var hideTextInFocus: Bool {
         get { defaults.object(forKey: kHideTextInFocus) as? Bool ?? true }
         set { defaults.set(newValue, forKey: kHideTextInFocus) }
+    }
+    private var excludeDeclinedEvents: Bool {
+        get { defaults.object(forKey: kExcludeDeclined) as? Bool ?? true }
+        set { defaults.set(newValue, forKey: kExcludeDeclined) }
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -205,6 +210,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         hideTextItem.state = hideTextInFocus ? .on : .off
         menu.addItem(hideTextItem)
 
+        let excludeDeclinedItem = NSMenuItem(title: "Exclude declined events", action: #selector(toggleExcludeDeclined(_:)), keyEquivalent: "")
+        excludeDeclinedItem.target = self
+        excludeDeclinedItem.tag = 202
+        excludeDeclinedItem.state = excludeDeclinedEvents ? .on : .off
+        menu.addItem(excludeDeclinedItem)
+
         menu.addItem(NSMenuItem.separator())
 
         let refreshItem = NSMenuItem(title: "Refresh", action: #selector(refreshAction), keyEquivalent: "r")
@@ -227,6 +238,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func toggleHideText(_ sender: NSMenuItem) {
         hideTextInFocus.toggle()
         sender.state = hideTextInFocus ? .on : .off
+        update()
+    }
+
+    @objc private func toggleExcludeDeclined(_ sender: NSMenuItem) {
+        excludeDeclinedEvents.toggle()
+        sender.state = excludeDeclinedEvents ? .on : .off
+        currentEvent = nil
+        firedBlinkAlerts.removeAll()
         update()
     }
 
@@ -405,6 +424,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         let futureEvents = events
             .filter { $0.startDate > now }
+            .filter { event in
+                guard excludeDeclinedEvents else { return true }
+                guard let attendees = event.attendees else { return true }
+                let me = attendees.first { $0.isCurrentUser }
+                return me?.participantStatus != .declined
+            }
             .sorted { $0.startDate < $1.startDate }
 
         return futureEvents.first
