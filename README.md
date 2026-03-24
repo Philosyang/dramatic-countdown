@@ -95,6 +95,26 @@ launchctl unload ~/Library/LaunchAgents/com.dramatic-countdown.plist
 
 After updating the code, rebuild with `swift build -c release` — the launch agent will pick up the new binary on next launch.
 
-## Calendar Access
+## Permissions
+
+### Calendar Access
 
 On first run, macOS will prompt you to grant calendar access. If denied, the menu bar will show "No calendar access". You can change this later in System Settings > Privacy & Security > Calendars.
+
+### Full Disk Access (for Focus mode detection)
+
+The Focus mode toggles ("Prevent blinks in Focus" and "Hide event text in Focus") require **Full Disk Access** for the binary. macOS protects the `~/Library/DoNotDisturb/` directory, so the app cannot detect Focus state without this permission.
+
+To grant it:
+
+1. Open **System Settings → Privacy & Security → Full Disk Access**
+2. Click **+** and add the built binary at:
+   ```
+   /path/to/dramatic-countdown/.build/release/DramaticCountdown
+   ```
+3. Restart the app:
+   ```bash
+   launchctl kickstart -k gui/$(id -u)/com.dramatic-countdown
+   ```
+
+Without Full Disk Access, the Focus toggles will have no effect (Focus is never detected).
