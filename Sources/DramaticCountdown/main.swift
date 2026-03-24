@@ -79,6 +79,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// Timer that ends a one-time blink
     private var oneTimeBlink: Timer?
 
+    // Focus mode preferences (persisted via UserDefaults)
+    private let defaults = UserDefaults.standard
+    private let kPreventBlinksInFocus = "preventBlinksInFocus"
+    private let kHideTextInFocus = "hideTextInFocus"
+
+    private var preventBlinksInFocus: Bool {
+        get { defaults.object(forKey: kPreventBlinksInFocus) as? Bool ?? true }
+        set { defaults.set(newValue, forKey: kPreventBlinksInFocus) }
+    }
+    private var hideTextInFocus: Bool {
+        get { defaults.object(forKey: kHideTextInFocus) as? Bool ?? true }
+        set { defaults.set(newValue, forKey: kHideTextInFocus) }
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApplication.shared.setActivationPolicy(.accessory)
 
@@ -148,6 +162,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    // MARK: - Focus Detection
+
+    private func isFocusActive() -> Bool {
+        let assertionsPath = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/DoNotDisturb/DB/Assertions.json")
+
+        guard let data = try? Data(contentsOf: assertionsPath),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let store = json["data"] as? [[String: Any]] else {
+            return false
+        }
+
+        for entry in store {
+            if let records = entry["storeAssertionRecords"] as? [[String: Any]], !records.isEmpty {
+                return true
+            }
+        }
+        return false
+    }
+
     // MARK: - Menu
 
     private func buildMenu() {
@@ -156,6 +190,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let eventInfoItem = NSMenuItem(title: "No upcoming events", action: nil, keyEquivalent: "")
         eventInfoItem.tag = 100
         menu.addItem(eventInfoItem)
+
+        menu.addItem(NSMenuItem.separator())
+
+        let preventBlinksItem = NSMenuItem(title: "Prevent blinks in Focus", action: #selector(togglePreventBlinks(_:)), keyEquivalent: "")
+        preventBlinksItem.target = self
+        preventBlinksItem.tag = 200
+        preventBlinksItem.state = preventBlinksInFocus ? .on : .off
+        menu.addItem(preventBlinksItem)
+
+        let hideTextItem = NSMenuItem(title: "Hide event text in Focus", action: #selector(toggleHideText(_:)), keyEquivalent: "")
+        hideTextItem.target = self
+        hideTextItem.tag = 201
+        hideTextItem.state = hideTextInFocus ? .on : .off
+        menu.addItem(hideTextItem)
 
         menu.addItem(NSMenuItem.separator())
 
@@ -168,6 +216,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(quitItem)
 
         statusItem.menu = menu
+    }
+
+    @objc private func togglePreventBlinks(_ sender: NSMenuItem) {
+        preventBlinksInFocus.toggle()
+        sender.state = preventBlinksInFocus ? .on : .off
+        update()
+    }
+
+    @objc private func toggleHideText(_ sender: NSMenuItem) {
+        hideTextInFocus.toggle()
+        sender.state = hideTextInFocus ? .on : .off
+        update()
     }
 
     @objc private func refreshAction() {
@@ -187,14 +247,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func update() {
         let now = Date()
+        let focusActive = isFocusActive()
+        let suppressBlinks = focusActive && preventBlinksInFocus
+        let suppressText = focusActive && hideTextInFocus
 
         // If we're in "LIVE" mode, show that until the timer expires
         if let liveEnd = liveUntil, let title = liveEventTitle {
             if now < liveEnd {
                 showStatusItem()
                 stopBlinking()
-                blinkText = " \(title) is live!"
-                applyBlinkStyle(highlighted: true)
+                if suppressText {
+                    setStatusText("")
+                } else if suppressBlinks {
+                    setStatusText(" \(title) is live!")
+                } else {
+                    blinkText = " \(title) is live!"
+                    applyBlinkStyle(highlighted: true)
+                }
                 return
             } else {
                 liveUntil = nil
@@ -244,8 +313,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             stopBlinking()
             liveEventTitle = title
             liveUntil = now.addingTimeInterval(5)
-            blinkText = " \(title) is live!"
-            applyBlinkStyle(highlighted: true)
+            if suppressText {
+                setStatusText("")
+            } else if suppressBlinks {
+                setStatusText(" \(title) is live!")
+            } else {
+                blinkText = " \(title) is live!"
+                applyBlinkStyle(highlighted: true)
+            }
             currentEvent = nil
             return
         }
@@ -263,7 +338,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Format the countdown
         let displayText: String
-        if totalSeconds >= 60 {
+        if suppressText {
+            displayText = ""
+        } else if totalSeconds >= 60 {
             let minutes = totalSeconds / 60
             displayText = " \(title) in \(minutes)m"
         } else {
@@ -271,10 +348,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         // Check one-time blink alerts (T-30m, T-15m, etc.)
-        checkBlinkAlerts(secondsRemaining: totalSeconds, displayText: displayText)
+        if !suppressBlinks {
+            checkBlinkAlerts(secondsRemaining: totalSeconds, displayText: displayText)
+        }
 
         // Under 10 seconds: continuous blink
-        if totalSeconds <= 10 {
+        if totalSeconds <= 10 && !suppressBlinks {
             startBlinking(text: displayText)
         } else if oneTimeBlink == nil {
             // Only set normal text if we're not in a one-time blink
