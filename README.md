@@ -13,6 +13,8 @@ A macOS menu bar app that shows a countdown to your next calendar event.
 - **Focus mode awareness** with two toggleable options:
   - **Prevent blinks in Focus** — suppresses all blink animations (including "is live!" background) when a macOS Focus mode is active
   - **Hide event text in Focus** — shows only the broadcast icon with no event text, useful when screen sharing during a meeting
+- **Skip all-day events** — ignores all-day calendar events so the countdown only tracks timed events
+- **Smart title truncation** — event names longer than 10 characters are trimmed to the first word for a cleaner menu bar
 
 ## Requirements
 

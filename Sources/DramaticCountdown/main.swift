@@ -84,6 +84,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private let kPreventBlinksInFocus = "preventBlinksInFocus"
     private let kHideTextInFocus = "hideTextInFocus"
     private let kExcludeDeclined = "excludeDeclinedEvents"
+    private let kSkipAllDay = "skipAllDayEvents"
 
     private var preventBlinksInFocus: Bool {
         get { defaults.object(forKey: kPreventBlinksInFocus) as? Bool ?? true }
@@ -96,6 +97,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var excludeDeclinedEvents: Bool {
         get { defaults.object(forKey: kExcludeDeclined) as? Bool ?? true }
         set { defaults.set(newValue, forKey: kExcludeDeclined) }
+    }
+    private var skipAllDayEvents: Bool {
+        get { defaults.object(forKey: kSkipAllDay) as? Bool ?? true }
+        set { defaults.set(newValue, forKey: kSkipAllDay) }
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -216,6 +221,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         excludeDeclinedItem.state = excludeDeclinedEvents ? .on : .off
         menu.addItem(excludeDeclinedItem)
 
+        let skipAllDayItem = NSMenuItem(title: "Skip all-day events", action: #selector(toggleSkipAllDay(_:)), keyEquivalent: "")
+        skipAllDayItem.target = self
+        skipAllDayItem.tag = 203
+        skipAllDayItem.state = skipAllDayEvents ? .on : .off
+        menu.addItem(skipAllDayItem)
+
         menu.addItem(NSMenuItem.separator())
 
         let refreshItem = NSMenuItem(title: "Refresh", action: #selector(refreshAction), keyEquivalent: "r")
@@ -244,6 +255,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func toggleExcludeDeclined(_ sender: NSMenuItem) {
         excludeDeclinedEvents.toggle()
         sender.state = excludeDeclinedEvents ? .on : .off
+        currentEvent = nil
+        firedBlinkAlerts.removeAll()
+        update()
+    }
+
+    @objc private func toggleSkipAllDay(_ sender: NSMenuItem) {
+        skipAllDayEvents.toggle()
+        sender.state = skipAllDayEvents ? .on : .off
         currentEvent = nil
         firedBlinkAlerts.removeAll()
         update()
@@ -323,7 +342,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let secondsUntil = event.startDate.timeIntervalSince(now)
-        let title = event.title ?? "Event"
+        let title = shortTitle(event.title ?? "Event")
         let totalSeconds = Int(secondsUntil)
 
         // At 0s — go LIVE
@@ -430,12 +449,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 let me = attendees.first { $0.isCurrentUser }
                 return me?.participantStatus != .declined
             }
+            .filter { event in
+                guard skipAllDayEvents else { return true }
+                return !event.isAllDay
+            }
             .sorted { $0.startDate < $1.startDate }
 
         return futureEvents.first
     }
 
     // MARK: - Display Helpers
+
+    private func shortTitle(_ title: String) -> String {
+        guard title.count > 10 else { return title }
+        return title.split(separator: " ", maxSplits: 1).first.map(String.init) ?? title
+    }
 
     private func setStatusText(_ text: String) {
         guard let button = statusItem.button else { return }
